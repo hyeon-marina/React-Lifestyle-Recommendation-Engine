@@ -36,17 +36,22 @@ API Raw Data
 ## 주요 기능
 
 * Mock 날씨 API 데이터 제공
+* OpenWeatherMap Current Weather Data API 선택 연동
+* API 요청 실패 시 Mock 데이터 fallback
 * API Raw Data를 서비스 내부 모델로 정규화
 * 체감온도 기반 옷차림 추천
-* 강수 확률 및 날씨 상태 기반 우산 추천
+* 강수 가능성 및 날씨 상태 기반 우산 추천
 * 미세먼지 등급 기반 행동 가이드 제공
 * React 컴포넌트를 통한 추천 결과 표시
+* 추천 규칙 단위 테스트
+* 날씨 데이터 정규화 테스트
 
 ## 기술 스택
 
 * React
 * TypeScript
 * Vite
+* Vitest
 * CSS
 
 ## 프로젝트 구조
@@ -55,20 +60,29 @@ API Raw Data
 src/
 ├── api/
 │   └── weatherApi.ts
+├── components/
+│   ├── RecommendationCard.tsx
+│   └── WeatherSummaryCard.tsx
+├── data/
+│   └── mockWeatherData.ts
+├── pages/
+│   └── LifestyleRecommendationPage.tsx
+├── recommendation/
+│   ├── __tests__/
+│   │   ├── airQualityRules.test.ts
+│   │   ├── clothingRules.test.ts
+│   │   ├── lifestyleRecommendationEngine.test.ts
+│   │   └── umbrellaRules.test.ts
+│   ├── airQualityRules.ts
+│   ├── clothingRules.ts
+│   ├── lifestyleRecommendationEngine.ts
+│   └── umbrellaRules.ts
 ├── types/
 │   └── weather.ts
-├── utils/
-│   └── normalizeWeatherData.ts
-├── recommendation/
-│   ├── clothingRules.ts
-│   ├── umbrellaRules.ts
-│   ├── airQualityRules.ts
-│   └── lifestyleRecommendationEngine.ts
-├── components/
-│   ├── WeatherSummaryCard.tsx
-│   └── RecommendationCard.tsx
-└── pages/
-    └── LifestyleRecommendationPage.tsx
+└── utils/
+    ├── __tests__/
+    │   └── normalizeWeatherData.test.ts
+    └── normalizeWeatherData.ts
 ```
 
 ## 디렉터리 역할
@@ -76,11 +90,12 @@ src/
 | 디렉터리             | 역할                        |
 | ---------------- | ------------------------- |
 | `api`            | 외부 API 또는 Mock API 호출 담당  |
+| `components`     | 재사용 가능한 UI 컴포넌트           |
+| `data`           | Mock 데이터 관리               |
+| `pages`          | 실제 화면 단위 컴포넌트             |
+| `recommendation` | Rule 기반 추천 로직 구현          |
 | `types`          | 서비스에서 사용할 데이터 타입 정의       |
 | `utils`          | API 응답 데이터를 서비스 내부 모델로 변환 |
-| `recommendation` | Rule 기반 추천 로직 구현          |
-| `components`     | 재사용 가능한 UI 컴포넌트           |
-| `pages`          | 실제 화면 단위 컴포넌트             |
 
 ## 실행 방법
 
@@ -111,6 +126,124 @@ Vite 개발 서버가 실행되면 브라우저에서 안내된 주소로 접속
 http://localhost:5173
 ```
 
+## 환경변수 설정
+
+이 프로젝트는 기본적으로 Mock 날씨 데이터를 사용합니다.
+따라서 별도의 API Key가 없어도 프로젝트를 실행하고 추천 엔진의 동작을 확인할 수 있습니다.
+
+실제 날씨 데이터를 사용하려면 OpenWeatherMap의 Current Weather Data API Key를 발급받은 뒤, 프로젝트 루트에 `.env` 파일을 생성하고 다음 값을 추가합니다.
+
+```env
+VITE_OPEN_WEATHER_API_KEY=your_open_weather_api_key
+```
+
+환경변수를 추가하거나 수정한 뒤에는 Vite 개발 서버를 재시작해야 합니다.
+
+```bash
+npm run dev
+```
+
+### `.env.example`
+
+Repository에는 실제 API Key를 포함하지 않습니다.
+대신 다음과 같은 `.env.example` 파일을 제공할 수 있습니다.
+
+```env
+VITE_OPEN_WEATHER_API_KEY=
+```
+
+### `.gitignore`
+
+실제 API Key가 들어가는 `.env` 파일은 Git에 올라가면 안 됩니다.
+
+`.gitignore`에 다음 항목이 포함되어 있어야 합니다.
+
+```gitignore
+.env
+.env.local
+```
+
+## OpenWeatherMap API 연동
+
+이 프로젝트에서 사용하는 실제 날씨 API는 OpenWeatherMap의 Current Weather Data API입니다.
+
+요청 형태는 다음과 같습니다.
+
+```txt
+GET https://api.openweathermap.org/data/2.5/weather
+```
+
+예시 요청 URL은 다음과 같습니다.
+
+```txt
+https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=YOUR_API_KEY&units=metric
+```
+
+현재 구현에서는 `q=Seoul`을 기준으로 서울의 날씨 데이터를 가져옵니다.
+
+## API Key가 없는 경우
+
+`.env` 파일이 없거나 `VITE_OPEN_WEATHER_API_KEY` 값이 비어 있으면 프로젝트는 자동으로 Mock 데이터를 사용합니다.
+
+```txt
+API Key 없음
+→ Mock 날씨 데이터 사용
+→ 추천 결과 정상 표시
+```
+
+## API 요청 실패 시 fallback
+
+API Key가 잘못되었거나 OpenWeatherMap 요청에 실패하면 화면을 중단하지 않고 Mock 데이터를 사용합니다.
+
+```txt
+OpenWeatherMap API 요청 실패
+→ 콘솔에 경고 출력
+→ Mock 날씨 데이터 사용
+→ 추천 결과 정상 표시
+```
+
+예를 들어 API Key가 유효하지 않으면 OpenWeatherMap에서 다음과 같은 응답이 발생할 수 있습니다.
+
+```json
+{
+  "cod": 401,
+  "message": "Invalid API key."
+}
+```
+
+이 경우에도 프로젝트는 Mock 데이터로 fallback되어 계속 동작합니다.
+
+## Mock 데이터 사용 이유
+
+이 프로젝트는 기술자료와 튜토리얼 목적의 예제 프로젝트입니다.
+따라서 API Key 발급 여부와 관계없이 누구나 클론 후 바로 실행할 수 있어야 합니다.
+
+Mock fallback 구조를 사용하는 이유는 다음과 같습니다.
+
+* API Key 없이도 프로젝트 실행 가능
+* API 요청 실패 시에도 화면 동작 유지
+* 추천 로직 테스트와 학습에 집중 가능
+* 외부 API 상태에 영향을 덜 받는 예제 구성 가능
+
+## 현재 구현의 강수 확률 처리 방식
+
+OpenWeatherMap Current Weather Data API는 일반적인 강수 확률 값을 직접 제공하지 않습니다.
+
+따라서 현재 프로젝트에서는 다음 기준으로 강수 가능성을 단순 추정합니다.
+
+```txt
+weather.main 값이 Rain인 경우
+→ 강수 가능성 70으로 처리
+
+rain.1h 또는 rain.3h 값이 존재하는 경우
+→ 강수 가능성 70으로 처리
+
+그 외
+→ 강수 가능성 0으로 처리
+```
+
+정확한 시간대별 강수 확률이 필요한 경우에는 Current Weather Data API가 아니라 Forecast API 또는 One Call API 사용을 고려해야 합니다.
+
 ## 구현 흐름
 
 이 프로젝트의 전체 데이터 흐름은 다음과 같습니다.
@@ -125,42 +258,19 @@ createLifestyleRecommendations()
 RecommendationCard 렌더링
 ```
 
-### 1. Mock API 데이터 가져오기
+### 1. 날씨 데이터 가져오기
 
-`src/api/weatherApi.ts`
+`fetchWeatherData()`는 다음 순서로 동작합니다.
 
-```ts
-export async function fetchWeatherData() {
-  return {
-    main: {
-      temp: 5,
-      feels_like: 2,
-    },
-    weather: [
-      {
-        main: 'Rain',
-      },
-    ],
-    rain: {
-      probability: 70,
-    },
-    airQuality: {
-      pm10: 90,
-    },
-  };
-}
+```txt
+1. VITE_OPEN_WEATHER_API_KEY 확인
+2. API Key가 없으면 Mock 데이터 반환
+3. API Key가 있으면 OpenWeatherMap API 호출
+4. API 요청 성공 시 실제 API 응답 반환
+5. API 요청 실패 시 Mock 데이터 반환
 ```
 
-현재는 튜토리얼 목적에 맞게 실제 API 대신 Mock 데이터를 사용합니다.
-
-초기 구현 단계에서 Mock 데이터를 사용하는 이유는 다음과 같습니다.
-
-* API Key 발급 없이 바로 실행 가능
-* 네트워크 환경과 무관하게 테스트 가능
-* 추천 로직 자체에 집중 가능
-* 후배 개발자가 프로젝트 구조를 쉽게 이해 가능
-
-## 데이터 정규화
+### 2. API Raw Data 정규화
 
 외부 API 응답 구조를 서비스 전체에서 직접 사용하면 유지보수가 어려워집니다.
 
@@ -226,14 +336,14 @@ recommendation/
 
 ### 우산 추천
 
-`umbrellaRules.ts`에서는 강수 확률과 날씨 상태를 함께 사용합니다.
+`umbrellaRules.ts`에서는 강수 가능성과 날씨 상태를 함께 사용합니다.
 
 예시 기준:
 
 ```txt
 현재 날씨가 RAIN        → 우산 추천
-강수 확률 70% 이상      → 우산 추천
-강수 확률 40% 이상      → 장시간 외출 시 우산 권장
+강수 가능성 70 이상     → 우산 추천
+강수 가능성 40 이상     → 장시간 외출 시 우산 권장
 그 외                  → 우산 없이 외출 가능
 ```
 
@@ -289,7 +399,7 @@ const recommendations = createLifestyleRecommendations(weather);
 ```txt
 현재 기온
 체감 온도
-강수 확률
+강수 가능성
 날씨 상태
 미세먼지 등급
 ```
@@ -329,6 +439,56 @@ Mock 데이터 기준으로 다음과 같은 결과가 표시됩니다.
 미세먼지 농도가 나쁩니다. 장시간 야외활동을 줄이고 마스크 착용을 권장합니다.
 ```
 
+## 테스트
+
+이 프로젝트는 추천 로직과 데이터 정규화 로직을 테스트합니다.
+
+### 테스트 실행
+
+```bash
+npm run test:run
+```
+
+### Watch 모드 실행
+
+```bash
+npm run test
+```
+
+### 테스트 대상
+
+```txt
+recommendation/
+├── clothingRules.test.ts
+├── umbrellaRules.test.ts
+├── airQualityRules.test.ts
+└── lifestyleRecommendationEngine.test.ts
+
+utils/
+└── normalizeWeatherData.test.ts
+```
+
+### 테스트하는 내용
+
+* 체감온도 기준 옷차림 추천 결과
+* 강수 가능성과 날씨 상태 기준 우산 추천 결과
+* 미세먼지 등급 기준 행동 가이드
+* 추천 엔진의 통합 결과
+* API Raw Data가 WeatherData로 정상 변환되는지
+* 누락된 API 데이터가 기본값 또는 UNKNOWN으로 안전하게 처리되는지
+
+## 빌드
+
+```bash
+npm run build
+```
+
+## Lint
+
+```bash
+npm run lint
+```
+
 ## 이 프로젝트의 핵심 설계 포인트
 
 ### 1. API 응답과 서비스 로직 분리
@@ -353,23 +513,36 @@ React 컴포넌트는 추천 기준을 판단하지 않습니다.
 
 컴포넌트는 추천 엔진이 반환한 결과를 화면에 표시하는 역할만 담당합니다.
 
+### 4. API 실패에 안전한 fallback 구조
+
+외부 API 호출이 실패해도 화면이 중단되지 않습니다.
+
+```txt
+외부 API 실패
+→ Mock 데이터 fallback
+→ 추천 엔진 정상 실행
+```
+
+튜토리얼형 프로젝트에서는 이 구조가 중요합니다.
+학습자는 API Key 발급 여부와 관계없이 프로젝트를 실행하고 핵심 로직을 확인할 수 있습니다.
+
 ## 확장 방향
 
-현재 프로젝트는 Mock API 기반의 Rule 기반 추천 예제입니다.
+현재 프로젝트는 Mock API와 OpenWeatherMap API를 함께 지원하는 Rule 기반 추천 예제입니다.
 
 추후 다음과 같이 확장할 수 있습니다.
 
-### 1. 실제 OpenWeatherMap API 연동
+### 1. 지역 선택 기능
 
-Mock 데이터를 제거하고 실제 날씨 API를 연결할 수 있습니다.
+현재는 서울 기준으로 날씨 데이터를 가져옵니다.
+
+추후 사용자가 지역을 선택하거나 브라우저 위치 정보를 활용해 지역별 추천을 제공할 수 있습니다.
 
 ```txt
-OpenWeatherMap API
-→ Backend API
-→ React Client
+서울 사용자 → 서울 날씨 기준 추천
+부산 사용자 → 부산 날씨 기준 추천
+제주 사용자 → 제주 날씨 기준 추천
 ```
-
-API Key 보호를 위해 실제 서비스에서는 프론트엔드에서 직접 외부 API를 호출하기보다 백엔드를 거치는 구조가 적합합니다.
 
 ### 2. 공공데이터 API 기반 미세먼지 정보 연동
 
@@ -377,7 +550,13 @@ API Key 보호를 위해 실제 서비스에서는 프론트엔드에서 직접 
 
 추후 공공데이터 API를 연결하면 실제 지역별 미세먼지 정보를 기반으로 추천할 수 있습니다.
 
-### 3. 사용자 설정 기반 개인화 추천
+### 3. 정확한 강수 확률 연동
+
+현재는 Current Weather Data API의 응답을 기반으로 강수 가능성을 단순 추정합니다.
+
+정확한 시간대별 강수 확률이 필요하다면 Forecast API 또는 One Call API를 사용할 수 있습니다.
+
+### 4. 사용자 설정 기반 개인화 추천
 
 사용자의 성향을 반영할 수 있습니다.
 
@@ -391,7 +570,7 @@ interface UserPreference {
 
 추위를 많이 타는 사용자에게는 같은 온도에서도 더 따뜻한 옷차림을 추천할 수 있습니다.
 
-### 4. 일정 서비스와 연동
+### 5. 일정 서비스와 연동
 
 일정 정보와 날씨 정보를 함께 활용할 수 있습니다.
 
@@ -405,7 +584,7 @@ interface UserPreference {
 출근 시간대 비 예보가 있으므로 우산을 챙기는 것이 좋습니다.
 ```
 
-### 5. 추천 엔진 백엔드 분리
+### 6. 추천 엔진 백엔드 분리
 
 추천 규칙이 복잡해지거나 여러 클라이언트에서 동일한 추천 로직을 사용해야 한다면 추천 엔진을 백엔드로 분리할 수 있습니다.
 
@@ -418,6 +597,13 @@ Recommendation Engine
     ↓
 Weather API / Air Quality API
 ```
+
+백엔드 분리가 필요한 경우는 다음과 같습니다.
+
+* API Key를 안전하게 관리해야 하는 경우
+* 사용자별 추천 이력을 저장해야 하는 경우
+* 여러 클라이언트에서 동일한 추천 결과를 사용해야 하는 경우
+* 추천 규칙이 복잡해지는 경우
 
 ## 마무리
 
